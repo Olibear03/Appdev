@@ -1,8 +1,34 @@
-# Welcome to your Expo app 👋
+# CvSU Reporting System
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A mobile application for Cavite State University (CvSU) students and administrators to report issues on campus, categorized by colleges.
 
-## Get started
+## Features
+
+- **User Roles**: Super Admin, College Admins, and Students.
+- **Student Registration**: Students can register using their @cvsu.edu.ph email.
+- **Report Submission**: Students can submit reports with location, image, description, date, and college category (CAS, CCJ, CEIT, CEMDS, or Unknown).
+- **Admin Dashboard**: College admins view and manage reports for their assigned college. Super admin can create college admin accounts and view all reports.
+- **Authentication**: Role-based login system.
+
+## Technologies Used
+
+- React Native
+- Expo
+- TypeScript
+- AsyncStorage for local data persistence
+- Expo Image Picker for image selection
+- Expo Location for GPS coordinates
+
+## Colleges
+
+Reports can be categorized under:
+- CAS (College of Arts and Sciences)
+- CCJ (College of Criminal Justice)
+- CEIT (College of Engineering and Information Technology)
+- CEMDS (College of Economics, Management, and Development Studies)
+- Unknown
+
+## Getting Started
 
 1. Install dependencies
 
@@ -16,35 +42,23 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+   Or run in web mode:
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   ```bash
+   npm run web
+   ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Usage
 
-## Get a fresh project
+- **Login**: Choose role (Student, Admin, Super Admin) and enter email.
+- **Super Admin**: Create admin accounts for colleges.
+- **College Admin**: View and update report statuses for their college.
+- **Students**: Register if new, select college, and submit reports with image and location.
 
-When you're ready, run:
+## Permissions
 
-```bash
-npm run reset-project
-```
+The app requires permissions for:
+- Media library access (for image selection)
+- Location access (for GPS coordinates)
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Grant these permissions when prompted.
