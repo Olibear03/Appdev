@@ -1,18 +1,29 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, Report } from '../types';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Report, User } from '../types';
+const getCrypto = () => {
+  try {
+    // Use require so bundlers don't fail if package is missing
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('expo-crypto');
+  } catch (e) {
+    return null;
+  }
+};
 
 interface AuthContextType {
   user: User | null;
   users: User[];
   reports: Report[];
-  login: (email: string, role: 'super-admin' | 'admin' | 'student') => void;
+  login: (email: string, role: 'super-admin' | 'admin' | 'student', password?: string) => Promise<void>;
   logout: () => void;
-  register: (email: string) => void;
+  register: (email: string, password?: string, opts?: { name?: string; studentId?: string; college?: string }) => Promise<void>;
   addReport: (reportData: Omit<Report, 'id' | 'status'>) => void;
   updateReportStatus: (id: string, status: Report['status']) => void;
   updateReportCollege: (id: string, college: Report['college']) => void;
-  createAdmin: (email: string, college: string) => void;
+  createAdmin: (email: string, college: string, password?: string) => void;
+  editAdmin: (id: string, updates: { email?: string; college?: string; password?: string }) => Promise<void>;
+  deleteAdmin: (id: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -51,21 +62,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadData();
   }, []);
 
-  const login = async (email: string, role: 'super-admin' | 'admin' | 'student') => {
+  const login = async (email: string, role: 'super-admin' | 'admin' | 'student', password?: string) => {
     const existingUser = users.find(u => u.email === email && u.role === role);
-    if (existingUser) {
-      setUser(existingUser);
-      await AsyncStorage.setItem('user', JSON.stringify(existingUser));
-    } else if (role === 'student' && email.endsWith('@cvsu.edu.ph')) {
-      const newUser: User = { id: Date.now().toString(), email, role };
-      const updatedUsers = [...users, newUser];
-      setUsers(updatedUsers);
-      setUser(newUser);
-      await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
-      await AsyncStorage.setItem('user', JSON.stringify(newUser));
-    } else {
-      throw new Error('Invalid credentials');
+    if (!existingUser) throw new Error('Invalid credentials');
+
+    // If the stored user has a password hash, require password and compare hashes
+    if (existingUser.password) {
+      if (!password) throw new Error('Invalid credentials');
+      const Crypto = getCrypto();
+      if (!Crypto) throw new Error('Missing dependency: please run `expo install expo-crypto`');
+      const hashed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, password);
+      if (hashed !== existingUser.password) throw new Error('Invalid credentials');
     }
+
+    setUser(existingUser);
+    await AsyncStorage.setItem('user', JSON.stringify(existingUser));
   };
 
   const logout = async () => {
@@ -73,8 +84,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await AsyncStorage.removeItem('user');
   };
 
-  const register = async (email: string) => {
-    login(email, 'student');
+  const register = async (email: string, password?: string, opts?: { name?: string; studentId?: string; college?: string }) => {
+    if (!email.endsWith('@cvsu.edu.ph')) throw new Error('Invalid email');
+    let hashed: string | undefined;
+    if (password) {
+      const Crypto = getCrypto();
+      if (!Crypto) throw new Error('Missing dependency: please run `expo install expo-crypto`');
+      hashed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, password);
+    }
+    const newUser: User = { id: Date.now().toString(), email, role: 'student', password: hashed, name: opts?.name, studentId: opts?.studentId, college: opts?.college };
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    setUser(newUser);
+    await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
+    await AsyncStorage.setItem('user', JSON.stringify(newUser));
   };
 
   const addReport = async (reportData: Omit<Report, 'id' | 'status'>) => {
@@ -96,11 +119,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await AsyncStorage.setItem('reports', JSON.stringify(updatedReports));
   };
 
-  const createAdmin = async (email: string, college: string) => {
-    const newAdmin: User = { id: Date.now().toString(), email, role: 'admin', college };
+  const createAdmin = async (email: string, college: string, password?: string) => {
+    let hashed: string | undefined;
+    if (password) {
+      const Crypto = getCrypto();
+      if (!Crypto) throw new Error('Missing dependency: please run `expo install expo-crypto`');
+      hashed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, password);
+    }
+    const newAdmin: User = { id: Date.now().toString(), email, role: 'admin', college, password: hashed };
     const updatedUsers = [...users, newAdmin];
     setUsers(updatedUsers);
     await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
+  };
+
+  const editAdmin = async (id: string, updates: { email?: string; college?: string; password?: string }) => {
+    const updatedUsers = await Promise.resolve(users.map(u => {
+      if (u.id !== id) return u;
+      const copy = { ...u };
+      if (updates.email) copy.email = updates.email;
+      if (updates.college) copy.college = updates.college as any;
+      return copy;
+    }));
+    // handle password separately to hash if provided
+    if (updates.password) {
+      const Crypto = getCrypto();
+      if (!Crypto) throw new Error('Missing dependency: please run `expo install expo-crypto`');
+      const hashed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, updates.password);
+      for (const u of updatedUsers) {
+        if (u.id === id) u.password = hashed;
+      }
+    }
+    setUsers(updatedUsers);
+    await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
+    // if editing current user, update stored user as well
+    if (user?.id === id) {
+      const newCurrent = updatedUsers.find(u => u.id === id) || null;
+      setUser(newCurrent);
+      if (newCurrent) await AsyncStorage.setItem('user', JSON.stringify(newCurrent));
+    }
+  };
+
+  const deleteAdmin = async (id: string) => {
+    const updatedUsers = users.filter(u => u.id !== id);
+    setUsers(updatedUsers);
+    await AsyncStorage.setItem('users', JSON.stringify(updatedUsers));
+    // if deleting current user, log out
+    if (user?.id === id) {
+      setUser(null);
+      await AsyncStorage.removeItem('user');
+    }
   };
 
   return (

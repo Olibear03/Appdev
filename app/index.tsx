@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, TextInput, Button, Alert, Image, ScrollView, View, TouchableOpacity, Animated, LayoutAnimation, UIManager, Platform, Modal, Pressable, Dimensions } from 'react-native';
-import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
-import { useAuth } from './context/AuthContext';
-import { Link } from 'expo-router';
+import { ThemedView } from '@/components/themed-view';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import * as FileSystem from 'expo-file-system';
+import { Link } from 'expo-router';
 import * as Sharing from 'expo-sharing';
+import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Animated, Button, Dimensions, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, TouchableOpacity, UIManager, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Colors } from '@/constants/theme';
+import { COLLEGES } from './colleges';
+import { useAuth } from './context/AuthContext';
 import { Report } from './types';
 
 if (Platform.OS === 'android') {
@@ -25,15 +26,18 @@ export default function HomeScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<'super-admin' | 'admin' | 'student'>('student');
   const [description, setDescription] = useState('');
   const [imageUris, setImageUris] = useState<string[]>([]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [college, setCollege] = useState<'CAS' | 'CCJ' | 'CEIT' | 'CEMDS' | 'unknown'>('unknown');
+  const [college, setCollege] = useState<Report['college']>('unknown');
+  const [collegeModalVisible, setCollegeModalVisible] = useState(false);
+  const [urgencyModalVisible, setUrgencyModalVisible] = useState(false);
   const [category, setCategory] = useState('');
   const [urgency, setUrgency] = useState<'low' | 'medium' | 'high'>('medium');
   const [adminEmail, setAdminEmail] = useState('');
-  const [adminCollege, setAdminCollege] = useState('CAS');
+  const [adminCollege, setAdminCollege] = useState<Report['college']>('CAS');
   const [statusFilter, setStatusFilter] = useState<'all' | Report['status']>('all');
   const [collegeFilter, setCollegeFilter] = useState<'all' | Report['college']>('all');
   const [galleryVisible, setGalleryVisible] = useState(false);
@@ -74,7 +78,7 @@ export default function HomeScreen() {
       return;
     }
     try {
-      await login(email, role);
+      await login(email, role, password);
     } catch (error) {
       Alert.alert('Error', 'Invalid credentials');
     }
@@ -180,7 +184,8 @@ export default function HomeScreen() {
       } else {
         try {
           // Use FileSystem and Sharing for mobile platforms
-          const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory || '';
+          // Some TypeScript typings may not expose documentDirectory/cacheDirectory in this environment
+          const baseDir = (FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || '';
           const fileUri = baseDir + filename;
           await FileSystem.writeAsStringAsync(fileUri, csvContent);
           const isAvailable = await Sharing.isAvailableAsync();
@@ -253,6 +258,13 @@ export default function HomeScreen() {
             onChangeText={setEmail}
             keyboardType="email-address"
           />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
           <ThemedView style={styles.roleContainer}>
             <TouchableOpacity
               style={[styles.roleButton, role === 'student' && styles.roleButtonSelected]}
@@ -274,7 +286,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </ThemedView>
           <TouchableOpacity style={styles.button} onPress={handleLogin}>
-            <ThemedText style={styles.buttonText}>Login</ThemedText>
+            <ThemedText style={styles.buttonText}>Sign In</ThemedText>
           </TouchableOpacity>
           {role === 'student' && (
             <Link href="/register" style={styles.link}>
@@ -358,36 +370,15 @@ export default function HomeScreen() {
             >
               <ThemedText style={styles.filterText}>All</ThemedText>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, collegeFilter === 'CAS' && styles.filterButtonSelected]}
-              onPress={() => setCollegeFilter('CAS')}
-            >
-              <ThemedText style={styles.filterText}>CAS</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, collegeFilter === 'CCJ' && styles.filterButtonSelected]}
-              onPress={() => setCollegeFilter('CCJ')}
-            >
-              <ThemedText style={styles.filterText}>CCJ</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, collegeFilter === 'CEIT' && styles.filterButtonSelected]}
-              onPress={() => setCollegeFilter('CEIT')}
-            >
-              <ThemedText style={styles.filterText}>CEIT</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, collegeFilter === 'CEMDS' && styles.filterButtonSelected]}
-              onPress={() => setCollegeFilter('CEMDS')}
-            >
-              <ThemedText style={styles.filterText}>CEMDS</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterButton, collegeFilter === 'unknown' && styles.filterButtonSelected]}
-              onPress={() => setCollegeFilter('unknown')}
-            >
-              <ThemedText style={styles.filterText}>Unknown</ThemedText>
-            </TouchableOpacity>
+            {COLLEGES.map(c => (
+              <TouchableOpacity
+                key={c.code}
+                style={[styles.filterButton, collegeFilter === c.code && styles.filterButtonSelected]}
+                onPress={() => setCollegeFilter(c.code)}
+              >
+                <ThemedText style={styles.filterText}>{c.code === 'unknown' ? 'Unknown' : c.code}</ThemedText>
+              </TouchableOpacity>
+            ))}
           </ThemedView>
           
           <ThemedText type="subtitle">Reports ({filteredReports.length})</ThemedText>
@@ -431,18 +422,11 @@ export default function HomeScreen() {
                 <ThemedView>
                   <ThemedText>Assign College:</ThemedText>
                   <ThemedView style={styles.filterButtons}>
-                    <TouchableOpacity style={styles.filterButton} onPress={() => updateReportCollege(report.id, 'CAS')}>
-                      <ThemedText style={styles.filterText}>CAS</ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.filterButton} onPress={() => updateReportCollege(report.id, 'CCJ')}>
-                      <ThemedText style={styles.filterText}>CCJ</ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.filterButton} onPress={() => updateReportCollege(report.id, 'CEIT')}>
-                      <ThemedText style={styles.filterText}>CEIT</ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.filterButton} onPress={() => updateReportCollege(report.id, 'CEMDS')}>
-                      <ThemedText style={styles.filterText}>CEMDS</ThemedText>
-                    </TouchableOpacity>
+                    {COLLEGES.filter(c => c.code !== 'unknown').map(c => (
+                      <TouchableOpacity key={c.code} style={styles.filterButton} onPress={() => updateReportCollege(report.id, c.code)}>
+                        <ThemedText style={styles.filterText}>{c.code}</ThemedText>
+                      </TouchableOpacity>
+                    ))}
                   </ThemedView>
                 </ThemedView>
               )}
@@ -458,10 +442,9 @@ export default function HomeScreen() {
             keyboardType="email-address"
           />
           <ThemedView style={styles.roleContainer}>
-            <Button title="CAS" onPress={() => setAdminCollege('CAS')} color={adminCollege === 'CAS' ? 'blue' : 'gray'} />
-            <Button title="CCJ" onPress={() => setAdminCollege('CCJ')} color={adminCollege === 'CCJ' ? 'blue' : 'gray'} />
-            <Button title="CEIT" onPress={() => setAdminCollege('CEIT')} color={adminCollege === 'CEIT' ? 'blue' : 'gray'} />
-            <Button title="CEMDS" onPress={() => setAdminCollege('CEMDS')} color={adminCollege === 'CEMDS' ? 'blue' : 'gray'} />
+            {COLLEGES.filter(c => c.code !== 'unknown').map(c => (
+              <Button key={c.code} title={c.code} onPress={() => setAdminCollege(c.code)} color={adminCollege === c.code ? 'blue' : 'gray'} />
+            ))}
           </ThemedView>
           <TouchableOpacity style={styles.button} onPress={handleCreateAdmin}>
             <ThemedText style={styles.buttonText}>Create Admin</ThemedText>
@@ -491,21 +474,11 @@ export default function HomeScreen() {
                     <TouchableOpacity style={[styles.filterButton, exportCollege === 'all' && styles.filterButtonSelected]} onPress={() => setExportCollege('all')}>
                       <ThemedText style={styles.filterText}>All</ThemedText>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.filterButton, exportCollege === 'CAS' && styles.filterButtonSelected]} onPress={() => setExportCollege('CAS')}>
-                      <ThemedText style={styles.filterText}>CAS</ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.filterButton, exportCollege === 'CCJ' && styles.filterButtonSelected]} onPress={() => setExportCollege('CCJ')}>
-                      <ThemedText style={styles.filterText}>CCJ</ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.filterButton, exportCollege === 'CEIT' && styles.filterButtonSelected]} onPress={() => setExportCollege('CEIT')}>
-                      <ThemedText style={styles.filterText}>CEIT</ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.filterButton, exportCollege === 'CEMDS' && styles.filterButtonSelected]} onPress={() => setExportCollege('CEMDS')}>
-                      <ThemedText style={styles.filterText}>CEMDS</ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.filterButton, exportCollege === 'unknown' && styles.filterButtonSelected]} onPress={() => setExportCollege('unknown')}>
-                      <ThemedText style={styles.filterText}>Unknown</ThemedText>
-                    </TouchableOpacity>
+                    {COLLEGES.map(c => (
+                      <TouchableOpacity key={c.code} style={[styles.filterButton, exportCollege === c.code && styles.filterButtonSelected]} onPress={() => setExportCollege(c.code)}>
+                        <ThemedText style={styles.filterText}>{c.code === 'unknown' ? 'Unknown' : c.code}</ThemedText>
+                      </TouchableOpacity>
+                    ))}
                   </ThemedView>
                 </>
               )}
@@ -561,37 +534,48 @@ export default function HomeScreen() {
           <ThemedText>Select Urgency:</ThemedText>
           <TouchableOpacity
             style={styles.dropdown}
-            onPress={() => Alert.alert(
-              'Select Urgency',
-              '',
-              [
-                { text: 'Low', onPress: () => setUrgency('low') },
-                { text: 'Medium', onPress: () => setUrgency('medium') },
-                { text: 'High', onPress: () => setUrgency('high') },
-                { text: 'Cancel', style: 'cancel' }
-              ]
-            )}
+            onPress={() => setUrgencyModalVisible(true)}
           >
             <ThemedText>{urgency.charAt(0).toUpperCase() + urgency.slice(1)}</ThemedText>
           </TouchableOpacity>
+          <Modal visible={urgencyModalVisible} animationType="slide" onRequestClose={() => setUrgencyModalVisible(false)}>
+            <SafeAreaView style={{ flex: 1 }}>
+              <ThemedText type="title" style={{ padding: 16 }}>Select Urgency</ThemedText>
+              <ScrollView>
+                {['low', 'medium', 'high'].map((u) => (
+                  <Pressable
+                    key={u}
+                    onPress={() => { setUrgency(u as any); setUrgencyModalVisible(false); }}
+                    style={({ pressed }) => ([{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#f1f3f6', backgroundColor: pressed ? '#eef5ff' : '#fff' }])}
+                  >
+                    <ThemedText style={{ color: urgency === u ? '#0a4dbd' : undefined }}>{u.charAt(0).toUpperCase() + u.slice(1)}</ThemedText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <View style={{ padding: 12 }}>
+                <Button title="Close" onPress={() => setUrgencyModalVisible(false)} />
+              </View>
+            </SafeAreaView>
+          </Modal>
           <ThemedText>Select College:</ThemedText>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => Alert.alert(
-              'Select College',
-              '',
-              [
-                { text: 'CAS', onPress: () => setCollege('CAS') },
-                { text: 'CCJ', onPress: () => setCollege('CCJ') },
-                { text: 'CEIT', onPress: () => setCollege('CEIT') },
-                { text: 'CEMDS', onPress: () => setCollege('CEMDS') },
-                { text: 'Unknown', onPress: () => setCollege('unknown') },
-                { text: 'Cancel', style: 'cancel' }
-              ]
-            )}
-          >
-            <ThemedText>{college}</ThemedText>
+          <TouchableOpacity style={styles.dropdown} onPress={() => setCollegeModalVisible(true)}>
+            <ThemedText>{COLLEGES.find(c => c.code === college)?.label || college}</ThemedText>
           </TouchableOpacity>
+          <Modal visible={collegeModalVisible} animationType="slide" onRequestClose={() => setCollegeModalVisible(false)}>
+            <SafeAreaView style={{ flex: 1 }}>
+              <ThemedText type="title" style={{ padding: 16 }}>Select College</ThemedText>
+              <ScrollView>
+                {COLLEGES.map(c => (
+                  <Pressable key={c.code} onPress={() => { setCollege(c.code); setCollegeModalVisible(false); }} style={({ pressed }) => [{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#f1f3f6', backgroundColor: pressed ? '#eef5ff' : '#fff' }]}>
+                    <ThemedText style={{ color: college === c.code ? '#0a4dbd' : undefined }}>{c.label}</ThemedText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <View style={{ padding: 12 }}>
+                <Button title="Close" onPress={() => setCollegeModalVisible(false)} />
+              </View>
+            </SafeAreaView>
+          </Modal>
           <TouchableOpacity style={styles.button} onPress={pickImage}>
             <ThemedText style={styles.buttonText}>Pick Image</ThemedText>
           </TouchableOpacity>
@@ -683,18 +667,11 @@ export default function HomeScreen() {
               <ThemedView>
                 <ThemedText>Assign College:</ThemedText>
                 <ThemedView style={styles.filterButtons}>
-                  <TouchableOpacity style={styles.filterButton} onPress={() => updateReportCollege(report.id, 'CAS')}>
-                    <ThemedText style={styles.filterText}>CAS</ThemedText>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.filterButton} onPress={() => updateReportCollege(report.id, 'CCJ')}>
-                    <ThemedText style={styles.filterText}>CCJ</ThemedText>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.filterButton} onPress={() => updateReportCollege(report.id, 'CEIT')}>
-                    <ThemedText style={styles.filterText}>CEIT</ThemedText>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.filterButton} onPress={() => updateReportCollege(report.id, 'CEMDS')}>
-                    <ThemedText style={styles.filterText}>CEMDS</ThemedText>
-                  </TouchableOpacity>
+                  {COLLEGES.filter(c => c.code !== 'unknown').map(c => (
+                    <TouchableOpacity key={c.code} style={styles.filterButton} onPress={() => updateReportCollege(report.id, c.code)}>
+                      <ThemedText style={styles.filterText}>{c.code}</ThemedText>
+                    </TouchableOpacity>
+                  ))}
                 </ThemedView>
               </ThemedView>
             )}

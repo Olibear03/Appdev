@@ -1,8 +1,13 @@
+import { College } from './colleges';
+
 export interface User {
   id: string;
   email: string;
   role: 'super-admin' | 'admin' | 'student';
-  college?: string; // for admin
+  college?: College; // for admin
+  password?: string;
+  name?: string;
+  studentId?: string;
 }
 
 export interface Report {
@@ -13,7 +18,7 @@ export interface Report {
   date: string;
   description: string;
   status: 'pending' | 'in-progress' | 'resolved';
-  college: 'CAS' | 'CCJ' | 'CEIT' | 'CEMDS' | 'unknown';
+  college: College;
   category: string;
   urgency: 'low' | 'medium' | 'high';
 }
